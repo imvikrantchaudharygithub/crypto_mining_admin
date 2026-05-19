@@ -1,0 +1,217 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Tokens ──────────────────────────────────────────────── */
+:root {
+  --mint-50:  #f4fbe8;
+  --mint-100: #e8f7d4;
+  --mint-200: #d4f0b0;
+  --mint-300: #b8e68a;
+  --mint-400: #a8e063;
+  --mint-500: #8fcb48;
+  --cream:    #f9f9f3;
+  --cream-2:  #f3f2e7;
+  --navy-900: #0a1628;
+  --navy-800: #0f1f38;
+  --navy-700: #1a2d4a;
+  --navy-500: #3b4a66;
+  --navy-300: #6b7a8f;
+  --ink:      #0a1628;
+  --radius:   14px;
+  --radius-lg:22px;
+  --font-display: "Manrope", sans-serif;
+  --font-body:    "Manrope", system-ui, sans-serif;
+  --font-mono:    "IBM Plex Mono", monospace;
+
+  /* Admin-specific surface tokens */
+  --admin-bg:        #F0F2F8;
+  --admin-card:      #ffffff;
+  --admin-border:    rgba(10, 22, 40, 0.09);
+  --admin-sidebar:   #0a1628;
+}
+
+/* ─── Base Reset ─────────────────────────────────────────────────── */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--admin-bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* ─── Section Tag ────────────────────────────────────────────────── */
+.section-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--navy-500);
+}
+
+.section-tag::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--mint-400);
+  flex-shrink: 0;
+}
+
+/* ─── Primary Button ─────────────────────────────────────────────── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 20px;
+  border: none;
+  border-radius: 999px;
+  background: var(--navy-900);
+  color: var(--mint-300);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+  box-shadow: 0 2px 8px rgba(10, 22, 40, 0.18);
+}
+
+.btn-primary:hover {
+  background: #000;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(10, 22, 40, 0.28);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--mint-400);
+  outline-offset: 3px;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--mint-400);
+  flex-shrink: 0;
+}
+
+/* ─── Admin Card ─────────────────────────────────────────────────── */
+.admin-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-card);
+  box-shadow: 0 1px 4px rgba(10, 22, 40, 0.06);
+}
+
+/* ─── Status Pills ───────────────────────────────────────────────── */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-pill-success {
+  background: rgba(143, 203, 72, 0.14);
+  color: #26450e;
+}
+
+.status-pill-warning {
+  background: rgba(245, 158, 11, 0.14);
+  color: #6b3800;
+}
+
+.status-pill-neutral {
+  background: rgba(26, 45, 74, 0.10);
+  color: var(--navy-700);
+}
+
+.status-pill-danger {
+  background: rgba(239, 68, 68, 0.14);
+  color: #7f1d1d;
+}
+
+/* ─── Sidebar ────────────────────────────────────────────────────── */
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+  white-space: nowrap;
+}
+
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sidebar-link.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--mint-300);
+}
+
+/* ─── Form Input Base ────────────────────────────────────────────── */
+.form-input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(10, 22, 40, 0.12);
+  background: #fff;
+  padding: 11px 16px;
+  font-size: 14px;
+  color: var(--navy-900);
+  box-shadow: 0 1px 3px rgba(10, 22, 40, 0.06);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.form-input::placeholder {
+  color: var(--navy-300);
+}
+
+.form-input:hover {
+  border-color: rgba(10, 22, 40, 0.22);
+}
+
+.form-input:focus {
+  border-color: var(--mint-400);
+  box-shadow: 0 0 0 3px rgba(168, 224, 99, 0.2);
+}
