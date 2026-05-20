@@ -2,10 +2,98 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Package, Ticket, Users, BarChart3, ArrowRight, TrendingUp, AlertCircle } from "lucide-react";
+import { ArrowUpRight, Package, Ticket, Users, BarChart3, ArrowRight, TrendingUp, AlertCircle, Wallet, IndianRupee } from "lucide-react";
 import { Card } from "@/components/primitives/Card";
 import { Pill } from "@/components/primitives/Pill";
 import { apiFetch } from "@/lib/api";
+
+// ─── Expense summary types ──────────────────────────────────────────
+type ExpenseSummary = {
+  thisMonthTotal: number;
+  thisMonthCount: number;
+  lastMonthTotal: number;
+  deltaPct: number;
+  topCategory: { name: string; total: number } | null;
+  series: { date: string; total: number }[];
+};
+
+const INR = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
+const rupees = (n: number) => `₹${INR.format(Math.round(n))}`;
+
+// Sparkline — pure SVG, no library
+function Sparkline({ data, color = "#1a2d4a" }: { data: number[]; color?: string }) {
+  if (!data || data.length === 0) {
+    return <div className="h-9 w-full rounded bg-navy-900/4" />;
+  }
+  const w = 100;
+  const h = 30;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = max - min || 1;
+  const step = data.length > 1 ? w / (data.length - 1) : w;
+  const points = data.map((v, i) => `${(i * step).toFixed(2)},${(h - ((v - min) / range) * h).toFixed(2)}`).join(" ");
+  const areaPoints = `0,${h} ${points} ${w},${h}`;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-9 w-full">
+      <polygon points={areaPoints} fill={color} opacity="0.12" />
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ExpenseSmartCard({ summary, loading }: { summary: ExpenseSummary | null; loading: boolean }) {
+  const positive = summary ? summary.deltaPct >= 0 : false;
+  return (
+    <Link href="/expenses" className="block">
+      <Card className="group relative flex flex-col gap-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+        <div className="flex items-start justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50">
+            <Wallet size={18} className="text-amber-600" />
+          </div>
+          <ArrowUpRight size={15} className="text-navy-300 transition group-hover:text-navy-700" />
+        </div>
+        <div>
+          {loading || !summary ? (
+            <div className="h-10 w-28 animate-pulse rounded-lg bg-navy-900/8" />
+          ) : (
+            <div className="flex items-baseline gap-1">
+              <IndianRupee size={20} className="text-navy-900" />
+              <p className="font-display text-4xl font-bold tabular-nums leading-none text-navy-900">
+                {INR.format(Math.round(summary.thisMonthTotal))}
+              </p>
+            </div>
+          )}
+          <p className="mt-1 text-[13px] font-medium text-navy-500">Expenses this month</p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {loading || !summary ? (
+            <div className="h-5 w-24 animate-pulse rounded-full bg-navy-900/8" />
+          ) : summary.lastMonthTotal === 0 && summary.thisMonthTotal === 0 ? (
+            <Pill tone="neutral">No data yet</Pill>
+          ) : (
+            <Pill tone={positive ? "danger" : "success"}>
+              {positive ? "▲" : "▼"} {Math.abs(summary.deltaPct).toFixed(1)}% vs last month
+            </Pill>
+          )}
+        </div>
+
+        {!loading && summary && summary.topCategory && (
+          <div className="flex items-center justify-between border-t border-navy-900/6 pt-2.5">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-navy-400">Top</span>
+            <span className="truncate text-[12px] font-medium text-navy-700">
+              {summary.topCategory.name} · <span className="tabular-nums">{rupees(summary.topCategory.total)}</span>
+            </span>
+          </div>
+        )}
+
+        {!loading && summary && (
+          <Sparkline data={summary.series.map((s) => s.total)} color="#0a1628" />
+        )}
+      </Card>
+    </Link>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────
 type Lead = { _id: string; name: string; subject?: string; status?: string; createdAt: string };
@@ -100,6 +188,8 @@ export default function DashboardPage() {
   const [counts, setCounts] = useState({ products: 0, plans: 0, leads: 0, openTickets: 0 });
   const [recentLeads, setRecentLeads] = useState<Lead[]>([]);
   const [recentTickets, setRecentTickets] = useState<TicketItem[]>([]);
+  const [expenseSummary, setExpenseSummary] = useState<ExpenseSummary | null>(null);
+  const [expenseLoading, setExpenseLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
@@ -126,6 +216,11 @@ export default function DashboardPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    apiFetch<{ summary: ExpenseSummary }>("/admin/expense-dashboard-summary")
+      .then((d) => setExpenseSummary(d.summary))
+      .catch(() => {})
+      .finally(() => setExpenseLoading(false));
   }, []);
 
   const STATS: StatEntry[] = [
@@ -161,6 +256,50 @@ export default function DashboardPage() {
         {STATS.map((stat) => (
           <StatCard key={stat.label} stat={stat} loading={loading} />
         ))}
+      </div>
+
+      {/* Expense smart card */}
+      <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
+        <ExpenseSmartCard summary={expenseSummary} loading={expenseLoading} />
+        <Card className="flex flex-col justify-center">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50">
+              <Wallet size={15} className="text-amber-600" />
+            </div>
+            <h2 className="font-display text-[15px] font-bold text-navy-900">Spend overview</h2>
+          </div>
+          {expenseLoading || !expenseSummary ? (
+            <div className="h-16 animate-pulse rounded-lg bg-navy-900/5" />
+          ) : (
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-widest text-navy-400">Entries</p>
+                <p className="mt-1 font-display text-xl font-bold text-navy-900">{expenseSummary.thisMonthCount}</p>
+                <p className="text-[11px] text-navy-500">this month</p>
+              </div>
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-widest text-navy-400">Last month</p>
+                <p className="mt-1 font-display text-xl font-bold text-navy-900 tabular-nums">{rupees(expenseSummary.lastMonthTotal)}</p>
+                <p className="text-[11px] text-navy-500">total spend</p>
+              </div>
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-widest text-navy-400">Top category</p>
+                <p className="mt-1 truncate font-display text-base font-bold text-navy-900">
+                  {expenseSummary.topCategory?.name ?? "—"}
+                </p>
+                <p className="text-[11px] text-navy-500 tabular-nums">
+                  {expenseSummary.topCategory ? rupees(expenseSummary.topCategory.total) : ""}
+                </p>
+              </div>
+            </div>
+          )}
+          <Link
+            href="/expenses"
+            className="mt-4 inline-flex w-fit items-center gap-1 font-mono text-[10px] uppercase tracking-[0.14em] text-navy-500 transition hover:text-navy-900"
+          >
+            View all expenses <ArrowRight size={11} />
+          </Link>
+        </Card>
       </div>
 
       {/* Middle row: Leads + Tickets */}
