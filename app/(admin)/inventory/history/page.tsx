@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { Suspense, useCallback, useEffect, useState, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { Card } from "@/components/primitives/Card";
@@ -17,7 +17,7 @@ type Movement = {
   reverses?: string | null;
 };
 
-export default function HistoryPage() {
+function HistoryPageContent() {
   const sp = useSearchParams(); const router = useRouter();
 
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -174,5 +174,13 @@ export default function HistoryPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function HistoryPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-navy-500">Loading…</div>}>
+      <HistoryPageContent />
+    </Suspense>
   );
 }

@@ -568,7 +568,7 @@ function ProductsCatalog({ products }: { products: ApiProduct[] }) {
           </div>
           <div className="prod-catalog-meta">
             <div className="prod-catalog-meta-line">{niceDate}</div>
-            <div className="prod-catalog-meta-line prod-catalog-meta-faint">// generated {isoDate}</div>
+            <div className="prod-catalog-meta-line prod-catalog-meta-faint">{`// generated ${isoDate}`}</div>
           </div>
         </div>
 
