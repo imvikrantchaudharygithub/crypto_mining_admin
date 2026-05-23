@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Package, Search, SlidersHorizontal, ArrowRight, Trash2 } from "lucide-react";
+import { Plus, Package, Search, SlidersHorizontal, ArrowRight, Trash2, FileDown } from "lucide-react";
 import { SectionedEditor } from "@/components/editors/SectionedEditor";
 import { Card } from "@/components/primitives/Card";
 import { Pill } from "@/components/primitives/Pill";
@@ -393,18 +394,42 @@ function ProductList() {
   const statusTone = (p: ApiProduct) =>
     p.available ? ("success" as const) : ("warning" as const);
 
+  const handleExportPDF = useCallback(() => {
+    if (products.length === 0) return;
+    const originalTitle = document.title;
+    const niceDate = new Date().toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "2-digit" }).replace(/,/g, "");
+    document.title = `Products Catalog — ${niceDate}`;
+    const restore = () => { document.title = originalTitle; };
+    window.addEventListener("afterprint", restore, { once: true });
+    // Let React paint the catalog before the print dialog opens.
+    setTimeout(() => window.print(), 60);
+  }, [products.length]);
+
   return (
-    <div>
+    <>
+    <div className="prod-screen-only">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="section-tag mb-2">Commerce</p>
           <h1 className="font-display text-3xl font-bold text-navy-900">Products</h1>
           <p className="mt-1.5 text-sm text-navy-500">Manage all ASIC miners listed on the shop.</p>
         </div>
-        <Link href="/products/new" className="btn-primary">
-          <Plus size={14} />
-          New Product
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportPDF}
+            disabled={loading || products.length === 0}
+            className="inline-flex items-center gap-2 rounded-full border border-navy-900/12 bg-white px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-navy-700 shadow-sm transition hover:border-navy-900 hover:bg-navy-900 hover:text-mint-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-navy-700 disabled:hover:border-navy-900/12"
+            title={products.length === 0 ? "No products to export" : "Export the full product list as PDF"}
+          >
+            <FileDown size={14} />
+            Convert to PDF
+          </button>
+          <Link href="/products/new" className="btn-primary">
+            <Plus size={14} />
+            New Product
+          </Link>
+        </div>
       </div>
 
       <Card className="mb-4 flex items-center gap-3 p-3">
@@ -506,7 +531,427 @@ function ProductList() {
         </div>
       </Card>
     </div>
+
+    <ProductsCatalog products={products} />
+    <PrintStyles />
+    </>
   );
+}
+
+// ─── Print-only catalog ──────────────────────────────────────────────
+function ProductsCatalog({ products }: { products: ApiProduct[] }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  const now = new Date();
+  const niceDate = now.toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const isoDate = now.toLocaleDateString("en-GB").replace(/\//g, ".");
+  const published = products.filter((p) => p.available).length;
+  const inStock = products.filter((p) => p.computedStatus === "In Stock").length;
+  const totalQty = products.reduce((sum, p) => sum + (p.quantity ?? 0), 0);
+
+  return createPortal(
+    <div className="prod-catalog-root" aria-hidden="true">
+      <header className="prod-catalog-head">
+        <div className="prod-catalog-head-row">
+          <div>
+            <div className="prod-catalog-tag">
+              <span className="prod-catalog-tag-dot" /> 01 / product catalog
+            </div>
+            <h1 className="prod-catalog-title">
+              Crypto Mining <em>Miles.</em>
+            </h1>
+            <p className="prod-catalog-subtitle">
+              The full ASIC line-up · 0% maintenance · pan-India shipping
+            </p>
+          </div>
+          <div className="prod-catalog-meta">
+            <div className="prod-catalog-meta-line">{niceDate}</div>
+            <div className="prod-catalog-meta-line prod-catalog-meta-faint">// generated {isoDate}</div>
+          </div>
+        </div>
+
+        <div className="prod-catalog-stats">
+          <div className="prod-catalog-stat">
+            <span className="prod-catalog-stat-num">{String(products.length).padStart(2, "0")}</span>
+            <span className="prod-catalog-stat-label">total products</span>
+          </div>
+          <div className="prod-catalog-stat">
+            <span className="prod-catalog-stat-num">{String(published).padStart(2, "0")}</span>
+            <span className="prod-catalog-stat-label">published</span>
+          </div>
+          <div className="prod-catalog-stat">
+            <span className="prod-catalog-stat-num">{String(inStock).padStart(2, "0")}</span>
+            <span className="prod-catalog-stat-label">in stock</span>
+          </div>
+          <div className="prod-catalog-stat">
+            <span className="prod-catalog-stat-num">{totalQty}</span>
+            <span className="prod-catalog-stat-label">units on hand</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="prod-catalog-grid">
+        {products.map((p, i) => {
+          const statusClass =
+            p.computedStatus === "In Stock"
+              ? "prod-catalog-status-instock"
+              : p.computedStatus === "Sold Out"
+              ? "prod-catalog-status-sold"
+              : "prod-catalog-status-soon";
+          return (
+            <article key={p._id} className="prod-catalog-card">
+              <div className="prod-catalog-card-head">
+                <span className="prod-catalog-card-idx">{String(i + 1).padStart(2, "0")}</span>
+                <span className={`prod-catalog-status ${statusClass}`}>
+                  <span className="prod-catalog-status-dot" /> {p.computedStatus}
+                </span>
+              </div>
+
+              <h2 className="prod-catalog-card-name">{p.name}</h2>
+              <div className="prod-catalog-card-algo">{p.algo}</div>
+
+              <hr className="prod-catalog-card-rule" />
+
+              <dl className="prod-catalog-specs">
+                <dt>Hashrate</dt><dd>{p.hashrate || "—"}</dd>
+                <dt>SKU</dt><dd className="prod-catalog-mono">{p.slug}</dd>
+                <dt>On hand</dt><dd>{p.quantity ?? 0} units</dd>
+                <dt>Listing</dt><dd>{p.available ? "Published" : "Draft"}</dd>
+              </dl>
+
+              <div className="prod-catalog-card-foot">
+                <div className="prod-catalog-price">{p.priceDisplay || "—"}</div>
+                {p.bestSeller && (
+                  <span className="prod-catalog-bestseller">
+                    <span className="prod-catalog-bestseller-dot" /> BEST SELLER
+                  </span>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <footer className="prod-catalog-foot">
+        <span>cryptominingmiles.in</span>
+        <span className="prod-catalog-foot-sep">━━</span>
+        <span>{niceDate}</span>
+        <span className="prod-catalog-foot-sep">━━</span>
+        <span>page generated for internal & customer use</span>
+      </footer>
+    </div>,
+    document.body
+  );
+}
+
+// ─── Print-only styles ───────────────────────────────────────────────
+const PRINT_STYLES_CSS = `
+      /* On-screen: hide the printable catalog */
+      .prod-catalog-root { display: none; }
+
+      @media print {
+        @page { size: A4 portrait; margin: 14mm; }
+
+        /* Catalog is rendered as a direct child of <body> via createPortal;
+           hide every other body child so only the catalog reaches the printer. */
+        body > *:not(.prod-catalog-root) { display: none !important; }
+
+        html, body {
+          height: auto !important;
+          overflow: visible !important;
+          background: #fbfbf3 !important;
+        }
+
+        .prod-catalog-root {
+          display: block !important;
+          background: #fbfbf3;
+          color: #0a1628;
+          font-family: "Manrope", system-ui, sans-serif;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .prod-catalog-root * {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        /* === HEAD === */
+        .prod-catalog-head {
+          margin-bottom: 14mm;
+          padding-bottom: 6mm;
+          border-bottom: 1px solid #0a162820;
+        }
+        .prod-catalog-head-row {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 8mm;
+          margin-bottom: 8mm;
+        }
+        .prod-catalog-tag {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 9px;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: #3b4a66;
+          margin-bottom: 6mm;
+        }
+        .prod-catalog-tag-dot {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: #8fcb48;
+        }
+        .prod-catalog-title {
+          font-family: "Manrope", system-ui, sans-serif;
+          font-size: 38pt;
+          font-weight: 800;
+          letter-spacing: -0.04em;
+          line-height: 0.96;
+          color: #0a1628;
+          margin: 0;
+        }
+        .prod-catalog-title em {
+          font-style: italic;
+          font-weight: 800;
+          color: #8fcb48;
+        }
+        .prod-catalog-subtitle {
+          margin-top: 3mm;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 9px;
+          color: #3b4a66;
+          letter-spacing: 0.04em;
+        }
+        .prod-catalog-meta {
+          text-align: right;
+        }
+        .prod-catalog-meta-line {
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 10px;
+          color: #0a1628;
+          letter-spacing: 0.06em;
+          margin-bottom: 2mm;
+        }
+        .prod-catalog-meta-faint { color: #6b7a8f; }
+
+        .prod-catalog-stats {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 0;
+          border-top: 1px solid #0a162818;
+          border-bottom: 1px solid #0a162818;
+        }
+        .prod-catalog-stat {
+          padding: 5mm 6mm;
+          border-left: 1px solid #0a162812;
+        }
+        .prod-catalog-stat:first-child { border-left: none; }
+        .prod-catalog-stat-num {
+          display: block;
+          font-family: "Manrope", system-ui, sans-serif;
+          font-size: 24pt;
+          font-weight: 800;
+          letter-spacing: -0.04em;
+          line-height: 1;
+          color: #0a1628;
+        }
+        .prod-catalog-stat-label {
+          display: block;
+          margin-top: 2mm;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 8px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: #3b4a66;
+        }
+
+        /* === GRID === */
+        .prod-catalog-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 6mm;
+          margin-top: 8mm;
+        }
+
+        .prod-catalog-card {
+          break-inside: avoid;
+          page-break-inside: avoid;
+          padding: 6mm 6mm 5mm;
+          border-radius: 4mm;
+          border: 1px solid #0a162818;
+          background: #ffffff;
+          position: relative;
+        }
+
+        .prod-catalog-card-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 4mm;
+          margin-bottom: 3mm;
+        }
+        .prod-catalog-card-idx {
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.18em;
+          color: #8fcb48;
+        }
+
+        .prod-catalog-status {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 2px 8px;
+          border-radius: 999px;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 7.5px;
+          font-weight: 700;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          border: 1px solid;
+        }
+        .prod-catalog-status-dot {
+          width: 5px; height: 5px; border-radius: 50%;
+        }
+        .prod-catalog-status-instock {
+          color: #2f7a1f;
+          background: #f4fbe8;
+          border-color: #b8e68a;
+        }
+        .prod-catalog-status-instock .prod-catalog-status-dot { background: #2f7a1f; }
+        .prod-catalog-status-sold {
+          color: #b91c1c;
+          background: #fef2f2;
+          border-color: #fecaca;
+        }
+        .prod-catalog-status-sold .prod-catalog-status-dot { background: #b91c1c; }
+        .prod-catalog-status-soon {
+          color: #92400e;
+          background: #fefce8;
+          border-color: #fde68a;
+        }
+        .prod-catalog-status-soon .prod-catalog-status-dot { background: #92400e; }
+
+        .prod-catalog-card-name {
+          font-family: "Manrope", system-ui, sans-serif;
+          font-size: 18pt;
+          font-weight: 700;
+          letter-spacing: -0.03em;
+          line-height: 1.05;
+          color: #0a1628;
+          margin: 0 0 1.5mm;
+        }
+        .prod-catalog-card-algo {
+          display: inline-block;
+          padding: 2px 8px;
+          border-radius: 999px;
+          background: #0a16280a;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 8px;
+          font-weight: 600;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: #1a2d4a;
+          margin-bottom: 4mm;
+        }
+        .prod-catalog-card-rule {
+          border: none;
+          border-top: 1px dashed #0a162820;
+          margin: 0 0 3mm;
+        }
+
+        .prod-catalog-specs {
+          display: grid;
+          grid-template-columns: auto 1fr;
+          gap: 1.5mm 4mm;
+          margin: 0 0 5mm;
+        }
+        .prod-catalog-specs dt {
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 7.5px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: #6b7a8f;
+          padding-top: 1px;
+        }
+        .prod-catalog-specs dd {
+          font-family: "Manrope", system-ui, sans-serif;
+          font-size: 10pt;
+          font-weight: 600;
+          color: #0a1628;
+          margin: 0;
+        }
+        .prod-catalog-mono {
+          font-family: "IBM Plex Mono", monospace !important;
+          font-size: 8.5pt !important;
+          font-weight: 500 !important;
+          color: #3b4a66 !important;
+        }
+
+        .prod-catalog-card-foot {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 3mm;
+          padding-top: 3mm;
+          border-top: 1px solid #0a162812;
+        }
+        .prod-catalog-price {
+          font-family: "Manrope", system-ui, sans-serif;
+          font-size: 18pt;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          color: #0a1628;
+        }
+        .prod-catalog-bestseller {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 8px;
+          border-radius: 999px;
+          background: #0a1628;
+          color: #b8e68a;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 7.5px;
+          font-weight: 700;
+          letter-spacing: 0.18em;
+        }
+        .prod-catalog-bestseller-dot {
+          width: 5px; height: 5px; border-radius: 50%;
+          background: #a8e063;
+        }
+
+        /* === FOOT === */
+        .prod-catalog-foot {
+          margin-top: 10mm;
+          padding-top: 5mm;
+          border-top: 1px solid #0a162820;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 4mm;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 8px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: #6b7a8f;
+        }
+        .prod-catalog-foot-sep { color: #0a162825; }
+      }
+    `;
+
+function PrintStyles() {
+  // Use dangerouslySetInnerHTML so React treats CSS as opaque content and
+  // doesn't HTML-escape `<`, `>`, `"` differently between server and client
+  // (which causes a hydration mismatch on a <style> with a text child).
+  return <style dangerouslySetInnerHTML={{ __html: PRINT_STYLES_CSS }} />;
 }
 
 // ─── Product Editor (Create / Edit) ──────────────────────────────────
