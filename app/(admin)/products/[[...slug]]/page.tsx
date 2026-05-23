@@ -19,7 +19,8 @@ type ApiProduct = {
   algo: string;
   hashrate: string;
   priceDisplay: string;
-  stock: string;
+  quantity: number;
+  computedStatus: "In Stock" | "Sold Out" | "Coming Soon";
   available: boolean;
   bestSeller?: boolean;
   status: string;
@@ -47,11 +48,11 @@ const PRODUCT_EDITOR_SECTIONS: SectionDef[] = [
         placeholder: "SHA-256",
       },
       {
-        key: "stock",
-        kind: "select",
-        label: "Stock Status",
-        options: ["In Stock", "Coming Soon", "Sold Out"],
-        placeholder: "In Stock",
+        key: "coming-soon-override",
+        kind: "toggle",
+        label: "Mark as Coming Soon",
+        onLabel: "Shows Coming Soon badge (overrides stock count)",
+        offLabel: "Auto: In Stock if qty > 0, else Sold Out",
       },
       { key: "available", kind: "toggle", label: "Listed on shop", onLabel: "Visible to customers", offLabel: "Hidden (draft)" },
       { key: "best-seller", kind: "toggle", label: "Best Seller", onLabel: "Glowing card + Best Seller badge", offLabel: "Standard card" },
@@ -262,7 +263,7 @@ function buildFormData(values: Record<string, unknown>): FormData {
   append("sku", values["sku"]);
   append("tag", values["tag"]);
   append("algo", values["algorithm"]);
-  append("stock", values["stock"]);
+  append("stockStatusOverride", values["coming-soon-override"] === "true" ? "Coming Soon" : "");
   append("available", String(values["available"] === "true"));
   append("bestSeller", String(values["best-seller"] === "true"));
   append("hashrate", values["hashrate-display"]);
@@ -308,7 +309,7 @@ function productToInitialValues(p: Record<string, unknown>): Record<string, unkn
     sku: p.sku ?? "",
     tag: p.tag ?? "",
     algorithm: p.algo ?? "SHA-256",
-    stock: p.stock ?? "In Stock",
+    "coming-soon-override": String(p.stockStatusOverride === "Coming Soon"),
     available: String(p.available ?? true),
     "best-seller": String(p.bestSeller ?? false),
     "hashrate-display": p.hashrate ?? "",
@@ -457,7 +458,7 @@ function ProductList() {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-navy-900">{p.name}</p>
-                            <p className="font-mono text-[10px] uppercase tracking-widest text-navy-400">{p.stock}</p>
+                            <p className="font-mono text-[10px] uppercase tracking-widest text-navy-400">{p.computedStatus} · qty {p.quantity ?? 0}</p>
                           </div>
                         </div>
                       </td>

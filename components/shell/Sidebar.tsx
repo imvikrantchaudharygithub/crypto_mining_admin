@@ -17,6 +17,7 @@ import {
   ChevronDown,
   UserCircle,
   Wallet,
+  Warehouse,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -49,6 +50,8 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Commerce",
     items: [
       { href: "/products", label: "Products", icon: Package },
+      { href: "/inventory", label: "Inventory", icon: Warehouse },
+      { href: "/inventory/history", label: "Stock History", icon: BarChart3 },
       { href: "/plans", label: "Plans", icon: BarChart3 },
     ],
   },
