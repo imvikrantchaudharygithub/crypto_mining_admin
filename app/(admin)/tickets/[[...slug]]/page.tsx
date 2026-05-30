@@ -10,19 +10,27 @@ import { apiFetch } from "@/lib/api";
 type Params = { slug?: string[] };
 
 type TicketStep = {
+  _id?: string;
   label: string;
-  description: string;
-  timestamp: string;
+  desc?: string;
+  time?: string;
+  occurredAt?: string;
   done: boolean;
+  active?: boolean;
+};
+
+type Customer = {
+  name?: string;
+  email?: string;
+  phone?: string;
 };
 
 type Ticket = {
   _id: string;
   ticketId: string;
-  customerName: string;
-  customerEmail: string;
-  minerModel?: string;
-  issueDescription?: string;
+  customer?: Customer;
+  issueType?: string;
+  description?: string;
   status: string;
   priority: string;
   assignedTo?: string;
@@ -31,9 +39,12 @@ type Ticket = {
   createdAt: string;
 };
 
+const STATUS_OPTIONS = ["open", "in-progress", "investigating", "awaiting-customer", "resolved", "closed"];
+const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"];
+
 const statusTone = (s: string): "neutral" | "success" | "warning" | "danger" => {
   if (s === "resolved" || s === "closed") return "success";
-  if (s === "in-progress") return "warning";
+  if (s === "in-progress" || s === "investigating") return "warning";
   if (s === "critical") return "danger";
   return "neutral";
 };
@@ -42,6 +53,14 @@ const priorityTone = (p: string): "neutral" | "success" | "warning" | "danger" =
   if (p === "Critical") return "danger";
   if (p === "High") return "warning";
   return "neutral";
+};
+
+const toDateInput = (s?: string): string => {
+  if (!s) return "";
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 // ─── Ticket List ──────────────────────────────────────────────────────
@@ -76,7 +95,7 @@ function TicketList() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-navy-900/8 bg-cream">
-                {["Ticket ID", "Customer", "Miner", "Status", "Priority", "Date", "Action"].map((h, i) => (
+                {["Ticket ID", "Customer", "Issue Type", "Status", "Priority", "Date", "Action"].map((h, i) => (
                   <th key={h} className={`px-5 py-3 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-navy-500 ${i === 6 ? "text-right" : "text-left"}`}>{h}</th>
                 ))}
               </tr>
@@ -95,8 +114,8 @@ function TicketList() {
                 : tickets.map((tkt) => (
                     <tr key={tkt._id} className="group transition-colors hover:bg-cream/50">
                       <td className="px-5 py-4 font-mono text-[12px] font-semibold text-navy-900">{tkt.ticketId}</td>
-                      <td className="px-5 py-4 text-[13px] text-navy-800">{tkt.customerName}</td>
-                      <td className="px-5 py-4 text-[12px] text-navy-600">{tkt.minerModel ?? "—"}</td>
+                      <td className="px-5 py-4 text-[13px] text-navy-800">{tkt.customer?.name ?? "—"}</td>
+                      <td className="px-5 py-4 text-[12px] text-navy-600">{tkt.issueType ?? "—"}</td>
                       <td className="px-5 py-4">
                         <Pill tone={statusTone(tkt.status)}>{tkt.status}</Pill>
                       </td>
@@ -135,35 +154,61 @@ function StepItem({
   index,
   ticketId,
   onRefresh,
+  onError,
 }: {
   step: TicketStep;
   index: number;
   ticketId: string;
   onRefresh: () => void;
+  onError: (msg: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(step.label);
-  const [description, setDescription] = useState(step.description);
+  const [desc, setDesc] = useState(step.desc ?? "");
+  const [time, setTime] = useState(step.time ?? "");
   const [done, setDone] = useState(step.done);
+  const [busy, setBusy] = useState(false);
 
   const inputBase = "w-full rounded-xl border border-navy-900/12 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-mint-400";
 
   const handleSave = async () => {
-    await apiFetch("/admin/ticket-step/update", {
-      method: "POST",
-      body: JSON.stringify({ ticketId, stepIndex: index, label, description, done }),
-    });
-    setEditing(false);
-    onRefresh();
+    setBusy(true);
+    try {
+      await apiFetch("/admin/ticket-step/update", {
+        method: "POST",
+        body: JSON.stringify({
+          ticketId,
+          stepIndex: index,
+          stepId: step._id,
+          label,
+          desc,
+          time,
+          done,
+        }),
+      });
+      setEditing(false);
+      onRefresh();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Failed to save step");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleDelete = async () => {
     if (!confirm("Delete this step?")) return;
-    await apiFetch("/admin/ticket-step/delete", {
-      method: "POST",
-      body: JSON.stringify({ ticketId, stepIndex: index }),
-    });
-    onRefresh();
+    setBusy(true);
+    try {
+      await apiFetch("/admin/ticket-step/delete", {
+        method: "POST",
+        body: JSON.stringify({ ticketId, stepIndex: index, stepId: step._id }),
+      });
+      onRefresh();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Failed to delete step");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -178,14 +223,15 @@ function StepItem({
         {editing ? (
           <div className="space-y-2">
             <input value={label} onChange={(e) => setLabel(e.target.value)} className={inputBase} placeholder="Step label" />
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={`${inputBase} resize-none`} placeholder="Description" />
+            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} className={`${inputBase} resize-none`} placeholder="Description" />
+            <input value={time} onChange={(e) => setTime(e.target.value)} className={inputBase} placeholder="Time (e.g. 2026-05-07 14:30)" />
             <label className="flex items-center gap-2 text-sm text-navy-700">
               <input type="checkbox" checked={done} onChange={(e) => setDone(e.target.checked)} />
               Mark as done
             </label>
             <div className="flex gap-2">
-              <button type="button" onClick={handleSave} className="btn-primary" style={{ padding: "8px 16px", fontSize: 11 }}>
-                <span className="dot" aria-hidden /> Save
+              <button type="button" disabled={busy} onClick={handleSave} className="btn-primary disabled:opacity-60" style={{ padding: "8px 16px", fontSize: 11 }}>
+                <span className="dot" aria-hidden /> {busy ? "Saving…" : "Save"}
               </button>
               <button type="button" onClick={() => setEditing(false)} className="rounded-xl border border-navy-900/12 bg-white px-4 py-2 font-mono text-[11px] text-navy-600 transition hover:bg-navy-900/5">
                 Cancel
@@ -197,16 +243,18 @@ function StepItem({
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-[14px] text-navy-900">{step.label}</p>
-                <p className="mt-1 text-[13px] leading-relaxed text-navy-600">{step.description}</p>
-                {step.timestamp && (
-                  <p className="mt-2 font-mono text-[10px] text-navy-400">{step.timestamp}</p>
+                {step.desc && (
+                  <p className="mt-1 text-[13px] leading-relaxed text-navy-600">{step.desc}</p>
+                )}
+                {step.time && (
+                  <p className="mt-2 font-mono text-[10px] text-navy-400">{step.time}</p>
                 )}
               </div>
               <div className="flex shrink-0 gap-1">
-                <button type="button" onClick={() => setEditing(true)} className="flex h-7 w-7 items-center justify-center rounded-lg border border-navy-900/12 bg-white text-navy-500 transition hover:bg-navy-900/5">
+                <button type="button" disabled={busy} onClick={() => setEditing(true)} className="flex h-7 w-7 items-center justify-center rounded-lg border border-navy-900/12 bg-white text-navy-500 transition hover:bg-navy-900/5 disabled:opacity-50">
                   <Edit2 size={11} />
                 </button>
-                <button type="button" onClick={handleDelete} className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-400 transition hover:bg-red-100 hover:text-red-600">
+                <button type="button" disabled={busy} onClick={handleDelete} className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-100 bg-red-50 text-red-400 transition hover:bg-red-100 hover:text-red-600 disabled:opacity-50">
                   <Trash2 size={11} />
                 </button>
               </div>
@@ -229,8 +277,16 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
   const [saving, setSaving] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [newTimestamp, setNewTimestamp] = useState("");
+  const [newTime, setNewTime] = useState("");
   const [addingStep, setAddingStep] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const flash = (kind: "error" | "success", msg: string) => {
+    if (kind === "error") { setError(msg); setSuccess(""); }
+    else { setSuccess(msg); setError(""); }
+    setTimeout(() => { setError(""); setSuccess(""); }, 4000);
+  };
 
   const fetchTicket = useCallback(async () => {
     setLoading(true);
@@ -239,10 +295,11 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
       setTicket(data.ticket);
       setStatus(data.ticket.status ?? "open");
       setPriority(data.ticket.priority ?? "Medium");
-      setAssignedTo(data.ticket.assignedTo ?? "");
-      setEta(data.ticket.eta ?? "");
-    } catch {
-      // silent
+      const at = data.ticket.assignedTo;
+      setAssignedTo(typeof at === "string" ? at : "");
+      setEta(toDateInput(data.ticket.eta));
+    } catch (e) {
+      flash("error", e instanceof Error ? e.message : "Failed to load ticket");
     } finally {
       setLoading(false);
     }
@@ -255,30 +312,45 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
     try {
       await apiFetch(`/admin/update-ticket/${ticketId}`, {
         method: "PUT",
-        body: JSON.stringify({ status, priority, assignedTo, eta }),
+        body: JSON.stringify({
+          status,
+          priority,
+          assignedTo: assignedTo.trim(),
+          eta: eta || null,
+        }),
       });
+      flash("success", "Ticket updated");
       fetchTicket();
-    } catch {
-      // silent
+    } catch (e) {
+      flash("error", e instanceof Error ? e.message : "Failed to update ticket");
     } finally {
       setSaving(false);
     }
   };
 
   const handleAddStep = async () => {
-    if (!newLabel.trim()) return;
+    if (!newLabel.trim()) {
+      flash("error", "Step label is required");
+      return;
+    }
     setAddingStep(true);
     try {
       await apiFetch("/admin/ticket-step/add", {
         method: "POST",
-        body: JSON.stringify({ ticketId, label: newLabel, description: newDesc, timestamp: newTimestamp }),
+        body: JSON.stringify({
+          ticketId,
+          label: newLabel,
+          desc: newDesc,
+          time: newTime,
+        }),
       });
       setNewLabel("");
       setNewDesc("");
-      setNewTimestamp("");
+      setNewTime("");
+      flash("success", "Step added");
       fetchTicket();
-    } catch {
-      // silent
+    } catch (e) {
+      flash("error", e instanceof Error ? e.message : "Failed to add step");
     } finally {
       setAddingStep(false);
     }
@@ -300,17 +372,27 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
         <span className="font-mono text-[11px] text-navy-700">{ticket.ticketId}</span>
       </div>
 
+      {error && (
+        <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
+      )}
+      {success && (
+        <p className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p>
+      )}
+
       {/* Header card */}
       <Card className="mb-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-widest text-navy-400 mb-1">{ticket.ticketId}</p>
-            <h1 className="font-display text-2xl font-bold text-navy-900">{ticket.customerName}</h1>
-            {ticket.minerModel && (
-              <p className="mt-1 font-mono text-[12px] text-navy-500">{ticket.minerModel}</p>
+            <h1 className="font-display text-2xl font-bold text-navy-900">{ticket.customer?.name ?? "Unknown customer"}</h1>
+            {ticket.customer?.email && (
+              <p className="mt-1 font-mono text-[12px] text-navy-500">{ticket.customer.email}</p>
             )}
-            {ticket.issueDescription && (
-              <p className="mt-3 text-[13px] leading-relaxed text-navy-600">{ticket.issueDescription}</p>
+            {ticket.issueType && (
+              <p className="mt-1 font-mono text-[12px] text-navy-500">Issue: {ticket.issueType}</p>
+            )}
+            {ticket.description && (
+              <p className="mt-3 text-[13px] leading-relaxed text-navy-600">{ticket.description}</p>
             )}
           </div>
           <div className="flex gap-2">
@@ -330,11 +412,12 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
             )}
             {(ticket.steps ?? []).map((step, i) => (
               <StepItem
-                key={i}
+                key={step._id ?? i}
                 step={step}
                 index={i}
                 ticketId={ticketId}
                 onRefresh={fetchTicket}
+                onError={(m) => flash("error", m)}
               />
             ))}
 
@@ -354,8 +437,8 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
                   <textarea rows={2} value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="What happened at this step…" className={`${inputBase} resize-none`} />
                 </div>
                 <div>
-                  <label className={labelBase}>Timestamp</label>
-                  <input type="text" value={newTimestamp} onChange={(e) => setNewTimestamp(e.target.value)} placeholder="e.g. 2026-05-07T14:30:00Z" className={inputBase} />
+                  <label className={labelBase}>Time</label>
+                  <input type="text" value={newTime} onChange={(e) => setNewTime(e.target.value)} placeholder="e.g. 2026-05-07 14:30" className={inputBase} />
                 </div>
                 <button type="button" onClick={handleAddStep} disabled={addingStep} className="btn-primary disabled:opacity-60">
                   <span className="dot" aria-hidden />
@@ -372,7 +455,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
           <div>
             <label className={labelBase}>Status</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className={`${inputBase} cursor-pointer`}>
-              {["open", "in-progress", "investigating", "resolved", "closed"].map((s) => (
+              {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
@@ -380,7 +463,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
           <div>
             <label className={labelBase}>Priority</label>
             <select value={priority} onChange={(e) => setPriority(e.target.value)} className={`${inputBase} cursor-pointer`}>
-              {["Low", "Medium", "High", "Critical"].map((p) => (
+              {PRIORITY_OPTIONS.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
@@ -391,7 +474,7 @@ function TicketDetail({ ticketId }: { ticketId: string }) {
           </div>
           <div>
             <label className={labelBase}>ETA</label>
-            <input type="text" placeholder="e.g. 2026-05-08 17:00" value={eta} onChange={(e) => setEta(e.target.value)} className={inputBase} />
+            <input type="datetime-local" value={eta} onChange={(e) => setEta(e.target.value)} className={inputBase} />
           </div>
           <button type="button" onClick={handleUpdate} disabled={saving} className="btn-primary w-full justify-center disabled:opacity-60">
             <span className="dot" aria-hidden />
