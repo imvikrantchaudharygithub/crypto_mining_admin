@@ -20,6 +20,24 @@ import {
   Warehouse,
 } from "lucide-react";
 import clsx from "clsx";
+import { LogoMark } from "@/components/primitives/Logo";
+import { useCurrentUser } from "@/components/shell/AuthGuard";
+
+const initialsOf = (name?: string): string => {
+  if (!name) return "??";
+  return name
+    .split(/\s+/)
+    .map((n) => n[0]?.toUpperCase() || "")
+    .slice(0, 2)
+    .join("") || name.slice(0, 2).toUpperCase();
+};
+
+const roleLabel = (role?: string): string => {
+  if (role === "super-admin") return "Super Admin";
+  if (role === "editor") return "Editor";
+  if (role === "support") return "Support";
+  return "Admin";
+};
 
 type NavItem = { href: string; label: string; icon: React.ElementType };
 type NavGroup = { title: string; items: NavItem[] };
@@ -74,7 +92,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/settings", label: "Site Settings", icon: Settings },
       { href: "/settings/seo", label: "SEO", icon: Settings },
-      { href: "/settings/users", label: "Team Members", icon: Users },
+      { href: "/users", label: "Admin Users", icon: Users },
       { href: "/account", label: "My Account", icon: UserCircle },
     ],
   },
@@ -119,6 +137,7 @@ function NavGroupSection({ group, pathname }: { group: NavGroup; pathname: strin
 
 export function Sidebar() {
   const pathname = usePathname();
+  const user = useCurrentUser();
 
   return (
     <aside
@@ -127,9 +146,7 @@ export function Sidebar() {
     >
       {/* Brand */}
       <div className="flex items-center gap-3 border-b border-white/8 px-5 py-5">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-mint-400">
-          <span className="font-mono text-[11px] font-bold text-navy-900">CM</span>
-        </div>
+        <LogoMark size={32} tone="light" />
         <div className="min-w-0">
           <p className="truncate font-display text-[14px] font-bold leading-tight text-white">
             Mining Miles
@@ -149,19 +166,19 @@ export function Sidebar() {
 
       {/* Bottom user row */}
       <div className="border-t border-white/8 px-3 py-3">
-        <button
-          type="button"
+        <Link
+          href="/users"
           className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 transition hover:bg-white/6"
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-navy-700 font-mono text-[11px] font-bold text-mint-300">
-            VK
+            {initialsOf(user?.name)}
           </div>
           <div className="min-w-0 text-left">
-            <p className="truncate text-[13px] font-medium text-white/80">Vikrant K.</p>
-            <p className="font-mono text-[9px] uppercase tracking-widest text-white/30">Super Admin</p>
+            <p className="truncate text-[13px] font-medium text-white/80">{user?.name ?? "Loading…"}</p>
+            <p className="font-mono text-[9px] uppercase tracking-widest text-white/30">{roleLabel(user?.role)}</p>
           </div>
           <ChevronDown size={13} className="ml-auto shrink-0 text-white/25" />
-        </button>
+        </Link>
       </div>
     </aside>
   );

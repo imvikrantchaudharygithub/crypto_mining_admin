@@ -1,8 +1,26 @@
 "use client";
 
-import { Search, Bell, HelpCircle } from "lucide-react";
+import { Search, Bell, HelpCircle, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCurrentUser } from "./AuthGuard";
+import { clearAuthSession } from "@/lib/api";
+
+const initialsOf = (name?: string): string => {
+  if (!name) return "??";
+  return name
+    .split(/\s+/)
+    .map((n) => n[0]?.toUpperCase() || "")
+    .slice(0, 2)
+    .join("") || name.slice(0, 2).toUpperCase();
+};
 
 export function Topbar() {
+  const router = useRouter();
+  const user = useCurrentUser();
+  const handleLogout = () => {
+    clearAuthSession();
+    router.replace("/login");
+  };
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-4 border-b border-navy-900/8 bg-white/90 px-5 backdrop-blur-sm">
       {/* Search */}
@@ -48,11 +66,19 @@ export function Topbar() {
         </button>
 
         {/* User avatar */}
+        <div className="ml-1 flex h-8 items-center justify-center rounded-xl bg-navy-900 px-2.5 font-mono text-[11px] font-bold text-mint-300" title={user?.email}>
+          {initialsOf(user?.name)}
+        </div>
+
+        {/* Logout */}
         <button
           type="button"
-          className="ml-1 flex h-8 w-8 items-center justify-center rounded-xl bg-navy-900 font-mono text-[11px] font-bold text-mint-300 transition hover:bg-navy-800"
+          aria-label="Log out"
+          title="Log out"
+          onClick={handleLogout}
+          className="flex h-8 w-8 items-center justify-center rounded-xl text-navy-400 transition hover:bg-red-50 hover:text-red-600"
         >
-          VK
+          <LogOut size={16} />
         </button>
       </div>
     </header>

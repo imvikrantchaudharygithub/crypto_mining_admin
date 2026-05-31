@@ -1,4 +1,43 @@
+"use client";
+
+import { useState, useEffect, FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { LogoMark } from "@/components/primitives/Logo";
+import { apiFetch, setAuthSession, getStoredUser, type AdminUser } from "@/lib/api";
+
 export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("admin@gmail.com");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // If already logged in, skip the form
+  useEffect(() => {
+    if (getStoredUser()) router.replace("/dashboard");
+  }, [router]);
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      const data = await apiFetch<{ success: boolean; token: string; user: AdminUser }>(
+        "/admin/login",
+        {
+          method: "POST",
+          body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        }
+      );
+      setAuthSession(data.token, data.user);
+      router.replace("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <main
       className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-12"
@@ -12,8 +51,8 @@ export default function LoginPage() {
       <section className="relative w-full max-w-sm">
         {/* Brand */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-navy-900 shadow-lg">
-            <span className="font-mono text-[13px] font-bold text-mint-400">CM</span>
+          <div className="mx-auto mb-4 flex justify-center">
+            <LogoMark size={56} />
           </div>
           <h1 className="font-display text-2xl font-bold text-navy-900">Admin Sign In</h1>
           <p className="mt-1.5 text-sm text-navy-500">
@@ -27,7 +66,13 @@ export default function LoginPage() {
             <p className="section-tag">Secure Access</p>
           </div>
 
-          <form className="space-y-4 p-6">
+          <form className="space-y-4 p-6" onSubmit={onSubmit}>
+            {error && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <label
                 htmlFor="email"
@@ -39,8 +84,11 @@ export default function LoginPage() {
                 id="email"
                 name="email"
                 type="email"
-                placeholder="admin@cryptominingmiles.in"
+                placeholder="admin@gmail.com"
                 autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
                 className="form-input"
               />
             </div>
@@ -53,12 +101,6 @@ export default function LoginPage() {
                 >
                   Password
                 </label>
-                <a
-                  href="/forgot-password"
-                  className="font-mono text-[10px] uppercase tracking-[0.1em] text-navy-400 transition hover:text-navy-900"
-                >
-                  Forgot?
-                </a>
               </div>
               <input
                 id="password"
@@ -66,13 +108,20 @@ export default function LoginPage() {
                 type="password"
                 placeholder="••••••••"
                 autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
                 className="form-input"
               />
             </div>
 
-            <button type="submit" className="btn-primary w-full justify-center">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="btn-primary w-full justify-center disabled:opacity-60"
+            >
               <span className="dot" aria-hidden />
-              Sign in
+              {submitting ? "Signing in…" : "Sign in"}
             </button>
           </form>
         </div>
