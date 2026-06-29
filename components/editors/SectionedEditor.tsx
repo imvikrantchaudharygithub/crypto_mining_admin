@@ -18,6 +18,7 @@ import type {
   ArrayStringFieldDef,
   ArrayObjectFieldDef,
 } from "@/lib/field-types";
+import { RichTextEditor } from "@/components/editors/RichTextEditor";
 
 type FieldValue = string | string[] | Record<string, string>[];
 type FormState = Record<string, FieldValue>;
@@ -123,6 +124,8 @@ function SimpleField({
             </option>
           ))}
         </select>
+      ) : field.kind === "richtext" ? (
+        <RichTextEditor value={value} onChange={onChange} />
       ) : field.kind === "textarea" ? (
         <textarea
           id={inputId}

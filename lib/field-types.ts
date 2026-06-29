@@ -20,6 +20,7 @@ export type SimpleFieldDef = {
   | { kind: "url" }
   | { kind: "select"; options: string[] }
   | { kind: "toggle"; onLabel?: string; offLabel?: string }
+  | { kind: "richtext" }
 );
 
 /** A list of plain text strings — e.g. algorithm filter chips, feature bullet lines */
